@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_KEY
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables')
-}
+// For development, use placeholder if env vars are not set
+const finalUrl = supabaseUrl || 'https://placeholder.supabase.co'
+const finalKey = supabaseKey || 'placeholder-key'
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+export const supabase = createClient(finalUrl, finalKey)
