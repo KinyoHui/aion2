@@ -1,9 +1,7 @@
 <template>
-  <div class="p-4">
-    <h2 class="text-2xl font-bold text-cyan-400 mb-6">掃描記錄</h2>
-
-    <!-- Upload Section -->
-    <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 mb-6">
+  <div class="relative h-full flex flex-col p-2 sm:p-4">
+    <!-- Camera Viewfinder / Upload Area -->
+    <div class="relative flex-1 flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-gray-700 bg-gray-800/50 backdrop-blur-sm">
       <input
         ref="fileInput"
         type="file"
@@ -12,109 +10,165 @@
         class="hidden"
         id="scan-upload"
       />
+      
+      <!-- Placeholder / Initial State -->
       <label
+        v-if="!previewImage"
         for="scan-upload"
-        class="w-full border-2 border-dashed border-cyan-500 rounded-lg py-12 px-6 flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-cyan-400 hover:bg-gray-700/50 transition-all duration-300"
+        class="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-gray-700/30 transition-colors p-4 sm:p-8"
       >
-        <div class="flex items-center justify-center gap-2">
-          <Camera class="w-8 h-8 text-cyan-400" v-if="!isProcessing" />
-          <ImageIcon class="w-8 h-8 text-cyan-400" v-if="!isProcessing" />
-          <Loader2 class="w-8 h-8 animate-spin text-cyan-400" v-else />
+        <div class="w-40 h-40 sm:w-64 sm:h-64 border-2 border-dashed border-gray-600 rounded-2xl flex flex-col items-center justify-center gap-4 mb-4 sm:mb-8 relative group">
+          <div class="absolute inset-0 bg-cyan-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <Camera class="w-12 h-12 sm:w-16 sm:h-16 text-gray-500 group-hover:text-cyan-400 transition-colors" />
+          <span class="text-gray-400 font-medium group-hover:text-cyan-300 text-sm sm:text-base">點擊拍攝或上傳</span>
         </div>
-        <div class="text-center">
-          <p class="text-lg font-semibold text-cyan-400 mb-1">
-            {{ isProcessing ? '正在處理圖片...' : '點擊拍攝或選擇遊戲截圖' }}
-          </p>
-          <p class="text-sm text-gray-400">
-            支持拍照或從相冊選擇圖片
-          </p>
-        </div>
+        <p class="text-gray-500 text-xs sm:text-sm max-w-xs text-center">
+          支持自動識別玩家 ID 和伺服器名稱
+        </p>
       </label>
-    </div>
 
-    <!-- Recognition Result Modal -->
-    <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-cyan-500">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-xl font-bold text-cyan-400">識別結果</h3>
-          <button @click="closeModal" class="text-gray-400 hover:text-white">
-            <X class="w-6 h-6" />
-          </button>
+      <!-- Image Preview with Scanning Effect -->
+      <div v-else class="relative w-full h-full flex items-center justify-center bg-black/50">
+        <img 
+          :src="previewImage" 
+          class="max-w-full max-h-full object-contain" 
+          alt="Preview" 
+        />
+        
+        <!-- Scanning Overlay -->
+        <div v-if="isProcessing" class="absolute inset-0 z-10 pointer-events-none">
+          <div class="absolute top-0 left-0 w-full h-1 bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.8)] animate-scan"></div>
+          <div class="absolute inset-0 bg-gradient-to-b from-cyan-500/10 to-transparent h-20 animate-scan"></div>
         </div>
 
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">OCR 識別結果</label>
-            <input
-              v-model="recognizedText"
-              type="text"
-              class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-cyan-500 focus:outline-none"
-              placeholder="識別出的文字"
-            />
-          </div>
+        <!-- Close Preview Button -->
+        <button 
+          @click="resetScanner" 
+          class="absolute top-4 right-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/70 z-20"
+        >
+          <X class="w-6 h-6" />
+        </button>
+      </div>
 
-          <!-- Player Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">
-              匹配玩家
-              <span class="text-xs text-gray-400">(系統已自動選擇最匹配的玩家)</span>
-            </label>
-            <select
-              v-model="selectedPlayerId"
-              class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-cyan-500 focus:outline-none"
-            >
-              <option value="">請選擇玩家</option>
-              <option v-for="player in matchedPlayers" :key="player.id" :value="player.id">
-                {{ player.name }} - {{ player.full_id_string }} (匹配度: {{ player.matchScore }})
-              </option>
-            </select>
-          </div>
-
-          <div v-if="selectedPlayer" class="bg-gray-700 p-3 rounded border border-cyan-500">
-            <p class="text-sm"><strong>選擇的玩家:</strong> {{ selectedPlayer.name }}</p>
-            <p class="text-sm text-gray-400">{{ selectedPlayer.full_id_string }}</p>
-            <p class="text-xs text-cyan-400">伺服器: {{ selectedPlayer.servers?.name }}</p>
-          </div>
-
-          <div v-if="matchedPlayers.length === 0" class="bg-red-900/50 border border-red-500 p-3 rounded">
-            <p class="text-sm text-red-400">未找到匹配的玩家，請檢查 OCR 結果或聯繫管理員添加玩家信息</p>
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-2 mt-6">
-          <button
-            @click="closeModal"
-            class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors"
-          >
-            取消
-          </button>
-          <button
-            @click="saveRecord"
-            :disabled="!selectedPlayerId || isSaving"
-            class="bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-600 text-black font-bold py-2 px-4 rounded transition-colors"
-          >
-            {{ isSaving ? '保存中...' : '保存記錄' }}
-          </button>
-        </div>
+      <!-- Processing Indicator -->
+      <div v-if="isProcessing" class="absolute bottom-10 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md px-6 py-3 rounded-full border border-cyan-500/30 flex items-center gap-3 z-20">
+        <Loader2 class="w-5 h-5 animate-spin text-cyan-400" />
+        <span class="text-cyan-100 font-medium tracking-wide">正在識別文字...</span>
       </div>
     </div>
 
-    <!-- Scan Records History -->
-    <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">
-      <h3 class="text-xl font-semibold mb-4">掃描記錄歷史</h3>
-      <div class="space-y-2">
-        <div
-          v-for="record in scanRecords"
-          :key="record.id"
-          class="bg-gray-700 p-4 rounded border border-gray-600"
-        >
-          <div class="flex justify-between items-center">
-            <div>
-              <p class="font-semibold">{{ record.players?.name }}</p>
-              <p class="text-sm text-gray-400">{{ record.players?.full_id_string }}</p>
-            </div>
-            <span class="text-xs text-gray-500">{{ formatDate(record.created_at) }}</span>
+    <!-- Bottom Sheet / Results Panel -->
+    <Transition name="slide-up">
+      <div 
+        v-if="showResultPanel" 
+        class="absolute bottom-0 left-0 w-full bg-gray-900 rounded-t-3xl shadow-2xl border-t border-gray-700 z-30 flex flex-col max-h-[80vh]"
+      >
+        <!-- ... content unchanged ... -->
+        <!-- Drag Handle -->
+        <div class="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing">
+          <div class="w-12 h-1.5 bg-gray-600 rounded-full"></div>
+        </div>
+
+        <div class="p-6 overflow-y-auto">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+              <ScanText class="w-5 h-5 text-cyan-400" />
+              識別結果
+            </h3>
+            <span class="text-xs px-2 py-1 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20">
+              {{ matchedPlayers.length }} 個匹配
+            </span>
           </div>
+
+          <!-- OCR Text Display -->
+          <div class="mb-6">
+            <label class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 block">原始文本</label>
+            <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700 text-gray-300 text-sm font-mono break-all">
+              {{ recognizedText }}
+            </div>
+          </div>
+
+          <!-- Match Selection -->
+          <div class="space-y-4 mb-8">
+            <label class="text-xs font-medium text-gray-400 uppercase tracking-wider block">匹配玩家</label>
+            
+            <div v-if="matchedPlayers.length > 0" class="space-y-2">
+              <div 
+                v-for="player in matchedPlayers" 
+                :key="player.id"
+                @click="selectedPlayerId = player.id"
+                class="p-3 rounded-lg border cursor-pointer transition-all duration-200 flex items-center justify-between group"
+                :class="selectedPlayerId === player.id 
+                  ? 'bg-cyan-500/10 border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.1)]' 
+                  : 'bg-gray-700/50 border-gray-600 hover:border-gray-500'"
+              >
+                <div>
+                  <div class="font-bold text-white group-hover:text-cyan-300 transition-colors">{{ player.name }}</div>
+                  <div class="text-xs text-gray-400">{{ player.full_id_string }}</div>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                  <span class="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">
+                    {{ player.servers?.name }}
+                  </span>
+                  <span 
+                    class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    :class="player.matchScore > 80 ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'"
+                  >
+                    {{ player.matchScore }}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-center">
+              <p class="text-red-400 text-sm">未找到匹配玩家</p>
+              <button class="mt-2 text-xs text-red-300 underline hover:text-red-200">手動添加玩家</button>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="grid grid-cols-2 gap-4">
+            <button 
+              @click="resetScanner"
+              class="py-3 px-4 rounded-xl font-semibold text-gray-300 bg-gray-700 hover:bg-gray-600 transition-colors"
+            >
+              重新掃描
+            </button>
+            <button 
+              @click="saveRecord"
+              :disabled="!selectedPlayerId || isSaving"
+              class="py-3 px-4 rounded-xl font-bold text-black bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-600 disabled:text-gray-400 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)]"
+            >
+              {{ isSaving ? '保存中...' : '確認保存' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- History Drawer Toggle (Bottom) -->
+    <div 
+      v-if="!showResultPanel && !isProcessing && !previewImage"
+      class="mt-2 sm:mt-4"
+    >
+      <div class="flex items-center justify-between mb-2 px-2">
+        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider">最近記錄</h3>
+        <button @click="loadScanRecords" class="text-cyan-400 hover:text-cyan-300 text-xs">刷新</button>
+      </div>
+      
+      <div class="flex gap-3 overflow-x-auto pb-2 snap-x">
+        <div 
+          v-for="record in scanRecords" 
+          :key="record.id"
+          class="flex-shrink-0 w-40 bg-gray-800/80 p-3 rounded-lg border border-gray-700 snap-start"
+        >
+          <div class="font-semibold text-sm truncate text-white">{{ record.players?.name }}</div>
+          <div class="text-xs text-gray-500 truncate mb-2">{{ record.players?.servers?.name }}</div>
+          <div class="text-[10px] text-gray-600">{{ formatDate(record.created_at) }}</div>
+        </div>
+        
+        <div v-if="scanRecords.length === 0" class="w-full text-center py-4 text-gray-600 text-sm">
+          暫無記錄
         </div>
       </div>
     </div>
@@ -124,17 +178,18 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { createWorker } from 'tesseract.js'
-import { Camera, ImageIcon, Loader2, X } from 'lucide-vue-next'
+import { Camera, Loader2, X, ScanText } from 'lucide-vue-next'
 import { supabase } from '../lib/supabase.js'
 
 const fileInput = ref(null)
 const isProcessing = ref(false)
-const showModal = ref(false)
+const showResultPanel = ref(false)
 const recognizedText = ref('')
 const selectedPlayerId = ref('')
 const isSaving = ref(false)
 const matchedPlayers = ref([])
 const scanRecords = ref([])
+const previewImage = ref(null)
 
 let worker = null
 
@@ -143,12 +198,24 @@ onMounted(async () => {
   await loadScanRecords()
 })
 
+const resetScanner = () => {
+  showResultPanel.value = false
+  previewImage.value = null
+  recognizedText.value = ''
+  selectedPlayerId.value = ''
+  matchedPlayers.value = []
+  if (fileInput.value) fileInput.value.value = ''
+}
+
 const handleFileUpload = async (event) => {
   const file = event.target.files[0]
   if (!file) return
 
+  // Create preview
+  previewImage.value = URL.createObjectURL(file)
   isProcessing.value = true
   recognizedText.value = ''
+  showResultPanel.value = false
 
   try {
     // Compress image if larger than 2MB
@@ -160,10 +227,11 @@ const handleFileUpload = async (event) => {
     const { data: { text } } = await worker.recognize(processedFile)
     recognizedText.value = text.trim()
     await findMatchingPlayers(recognizedText.value)
-    showModal.value = true
+    showResultPanel.value = true
   } catch (error) {
     console.error('OCR Error:', error)
     alert('識別失敗，請重試')
+    resetScanner()
   } finally {
     isProcessing.value = false
   }
@@ -176,7 +244,6 @@ const compressImage = (file) => {
     const img = new Image()
 
     img.onload = () => {
-      // Calculate new dimensions (max 1920px width/height)
       const maxSize = 1920
       let { width, height } = img
 
@@ -194,8 +261,6 @@ const compressImage = (file) => {
 
       canvas.width = width
       canvas.height = height
-
-      // Draw and compress
       ctx.drawImage(img, 0, 0, width, height)
 
       canvas.toBlob((blob) => {
@@ -203,7 +268,7 @@ const compressImage = (file) => {
           type: 'image/jpeg',
           lastModified: Date.now()
         }))
-      }, 'image/jpeg', 0.8) // 80% quality
+      }, 'image/jpeg', 0.8)
     }
 
     img.src = URL.createObjectURL(file)
@@ -221,92 +286,58 @@ const findMatchingPlayers = async (text) => {
         )
       `)
 
-    if (error) {
-      console.error('Error loading players:', error)
-      // For demo purposes, show a mock result
-      matchedPlayers.value = [{
-        id: 1,
-        name: 'DemoPlayer',
-        full_id_string: 'DemoPlayer[DemoServer]',
-        servers: { name: 'DemoServer' },
-        matchScore: 50
-      }]
-      selectedPlayerId.value = 1
-      return
+    if (error) throw error
+
+    // Extract name and server from OCR text using regex
+    const match = text.match(/^(.+?)\[(.+?)\]$/)
+    let extractedName = ''
+    let extractedServer = ''
+
+    if (match) {
+      extractedName = match[1].trim()
+      extractedServer = match[2].trim()
+    } else {
+      const bracketMatch = text.match(/\[(.+?)\]/)
+      if (bracketMatch) {
+        extractedServer = bracketMatch[1].trim()
+        extractedName = text.replace(/\[.*\]/, '').trim()
+      }
+    }
+
+    // Fuzzy matching algorithm
+    const matches = data.map(player => {
+      let score = 0
+      const playerName = player.name.toLowerCase()
+      const playerServer = player.servers?.name.toLowerCase() || ''
+      const playerFullId = player.full_id_string.toLowerCase()
+
+      const nameLower = extractedName.toLowerCase()
+      const serverLower = extractedServer.toLowerCase()
+
+      if (playerName === nameLower) score += 100
+      else if (playerName.includes(nameLower) || nameLower.includes(playerName)) score += 50
+      else if (nameLower && (playerName.includes(nameLower) || nameLower.includes(playerName))) score += 30
+
+      if (playerServer === serverLower) score += 50
+      else if (playerServer.includes(serverLower) || serverLower.includes(playerServer)) score += 25
+
+      if (playerFullId.includes(text.toLowerCase())) score += 20
+
+      return { ...player, matchScore: score }
+    })
+
+    matchedPlayers.value = matches
+      .filter(player => player.matchScore > 10)
+      .sort((a, b) => b.matchScore - a.matchScore)
+
+    if (matchedPlayers.value.length > 0 && matchedPlayers.value[0].matchScore >= 50) {
+      selectedPlayerId.value = matchedPlayers.value[0].id
     }
   } catch (e) {
-    console.error('Supabase not configured:', e)
-    // For demo purposes, show a mock result
-    matchedPlayers.value = [{
-      id: 1,
-      name: 'DemoPlayer',
-      full_id_string: 'DemoPlayer[DemoServer]',
-      servers: { name: 'DemoServer' },
-      matchScore: 50
-    }]
-    selectedPlayerId.value = 1
-    return
-  }
-
-  // Extract name and server from OCR text using regex
-  const match = text.match(/^(.+?)\[(.+?)\]$/)
-  let extractedName = ''
-  let extractedServer = ''
-
-  if (match) {
-    extractedName = match[1].trim()
-    extractedServer = match[2].trim()
-  } else {
-    // Fallback: try to extract any bracketed content
-    const bracketMatch = text.match(/\[(.+?)\]/)
-    if (bracketMatch) {
-      extractedServer = bracketMatch[1].trim()
-      extractedName = text.replace(/\[.*\]/, '').trim()
-    }
-  }
-
-  // Fuzzy matching algorithm
-  const matches = data.map(player => {
-    let score = 0
-    const playerName = player.name.toLowerCase()
-    const playerServer = player.servers?.name.toLowerCase() || ''
-    const playerFullId = player.full_id_string.toLowerCase()
-
-    const nameLower = extractedName.toLowerCase()
-    const serverLower = extractedServer.toLowerCase()
-
-    // Exact name match gets highest score
-    if (playerName === nameLower) score += 100
-    // Partial name match
-    else if (playerName.includes(nameLower) || nameLower.includes(playerName)) score += 50
-    // Name contains OCR text or vice versa
-    else if (nameLower && (playerName.includes(nameLower) || nameLower.includes(playerName))) score += 30
-
-    // Exact server match
-    if (playerServer === serverLower) score += 50
-    // Partial server match
-    else if (playerServer.includes(serverLower) || serverLower.includes(playerServer)) score += 25
-
-    // Full ID string contains OCR text
-    if (playerFullId.includes(text.toLowerCase())) score += 20
-
-    return { ...player, matchScore: score }
-  })
-
-  // Sort by match score and filter out very low matches
-  matchedPlayers.value = matches
-    .filter(player => player.matchScore > 10)
-    .sort((a, b) => b.matchScore - a.matchScore)
-
-  // Auto-select the best match if score is high enough
-  if (matchedPlayers.value.length > 0 && matchedPlayers.value[0].matchScore >= 50) {
-    selectedPlayerId.value = matchedPlayers.value[0].id
+    console.error('Error loading players:', e)
+    alert('無法加載玩家數據，請檢查網絡或數據庫配置')
   }
 }
-
-const selectedPlayer = computed(() => {
-  return matchedPlayers.value.find(player => player.id === selectedPlayerId.value)
-})
 
 const saveRecord = async () => {
   if (!selectedPlayerId.value) {
@@ -317,28 +348,23 @@ const saveRecord = async () => {
   isSaving.value = true
 
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('scan_records')
       .insert([{
         player_id: selectedPlayerId.value
       }])
 
-    if (error) {
-      console.error('Error saving record:', error)
-      alert('保存記錄失敗: ' + error.message)
-    } else {
-      alert('記錄保存成功！')
-      closeModal()
-      loadScanRecords()
-    }
-  } catch (e) {
-    console.error('Supabase not configured:', e)
-    // For demo purposes, simulate success
-    alert('演示模式：記錄保存成功！')
-    closeModal()
-  }
+    if (error) throw error
 
-  isSaving.value = false
+    alert('記錄保存成功！')
+    resetScanner()
+    loadScanRecords()
+  } catch (e) {
+    console.error('Error saving record:', e)
+    alert('保存記錄失敗: ' + (e.message || '未知錯誤'))
+  } finally {
+    isSaving.value = false
+  }
 }
 
 const loadScanRecords = async () => {
@@ -349,53 +375,24 @@ const loadScanRecords = async () => {
         *,
         players (
           name,
-          full_id_string
+          full_id_string,
+          servers (
+            name
+          )
         )
       `)
       .order('created_at', { ascending: false })
       .limit(20)
 
-    if (error) {
-      console.error('Error loading scan records:', error)
-      // For demo purposes, show mock data
-      scanRecords.value = [{
-        id: 1,
-        player_id: 1,
-        created_at: new Date().toISOString(),
-        players: {
-          name: 'DemoPlayer',
-          full_id_string: 'DemoPlayer[DemoServer]'
-        }
-      }]
-    } else {
-      scanRecords.value = data
-    }
+    if (error) throw error
+    scanRecords.value = data
   } catch (e) {
-    console.error('Supabase not configured:', e)
-    // For demo purposes, show mock data
-    scanRecords.value = [{
-      id: 1,
-      player_id: 1,
-      created_at: new Date().toISOString(),
-      players: {
-        name: 'DemoPlayer',
-        full_id_string: 'DemoPlayer[DemoServer]'
-      }
-    }]
-  }
-}
-
-const closeModal = () => {
-  showModal.value = false
-  recognizedText.value = ''
-  selectedPlayerId.value = ''
-  matchedPlayers.value = []
-  if (fileInput.value) {
-    fileInput.value.value = ''
+    console.error('Error loading scan records:', e)
   }
 }
 
 const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleString('zh-CN')
+  const date = new Date(dateString)
+  return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`
 }
 </script>

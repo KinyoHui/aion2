@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co'
+const supabaseKey = import.meta.env.VITE_SUPABASE_KEY || 'placeholder-key'
 
-// For development, use placeholder if env vars are not set
-const finalUrl = supabaseUrl || 'https://placeholder.supabase.co'
-const finalKey = supabaseKey || 'placeholder-key'
+if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_KEY || import.meta.env.VITE_SUPABASE_URL === 'your_supabase_project_url') {
+  console.warn('Supabase credentials not found. Please check your .env file.')
+}
 
-export const supabase = createClient(finalUrl, finalKey)
+export const supabase = createClient(supabaseUrl, supabaseKey)
